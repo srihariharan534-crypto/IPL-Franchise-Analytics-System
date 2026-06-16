@@ -1,0 +1,138 @@
+version: '3.9'
+
+services:
+  # ── MySQL Database ─────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: ipl_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass123}
+      MYSQL_DATABASE:      ${MYSQL_DATABASE:-ipl_analytics}
+      MYSQL_USER:          ${MYSQL_USER:-ipl_user}
+      MYSQL_PASSWORD:      ${MYSQL_PASSWORD:-ipl_pass}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ipl_network
+
+  # ── FastAPI Backend ────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: ipl_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=2
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data:ro
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ipl_network
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --workers 2
+
+  # ── Streamlit Dashboard ────────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dashboard
+    container_name: ipl_dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - ipl_network
+    command: streamlit run streamlit_app/main.py --server.port 8501 --server.address 0.0.0.0
+
+  # ── ETL Runner (one-shot) ─────────────────────────────────
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: etl
+    container_name: ipl_etl
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ipl_network
+    command: python etl/orchestration/master_pipeline.py --target all
+
+  # ── Monitoring Dashboard ───────────────────────────────────
+  monitoring:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: monitoring
+    container_name: ipl_monitoring
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mysql
+    ports:
+      - "${MONITORING_PORT:-8502}:8502"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ipl_network
+    command: python monitoring/pipeline_health_monitor.py
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  ipl_network:
+    driver: bridge
+    name: ipl_analytics_net

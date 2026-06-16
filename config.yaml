@@ -1,0 +1,137 @@
+# ============================================================
+# IPL Franchise Analytics System — Master Configuration
+# ============================================================
+
+project:
+  name: "IPL Franchise Analytics System"
+  version: "1.0.0"
+  description: "Enterprise-grade IPL franchise decision intelligence platform"
+  environment: "development"  # development | staging | production
+
+# ── Database ──────────────────────────────────────────────
+database:
+  dialect: "mysql+pymysql"
+  host: "${DB_HOST}"
+  port: ${DB_PORT}
+  name: "${DB_NAME}"
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  pool_size: 10
+  max_overflow: 20
+  pool_recycle: 3600
+  echo: false
+
+# ── Data Paths ────────────────────────────────────────────
+data:
+  raw: "data/raw"
+  staging: "data/staging"
+  processed: "data/processed"
+  curated: "data/curated"
+  warehouse: "data/warehouse"
+
+  files:
+    matches: "matches.csv"
+    deliveries: "deliveries.csv"
+    players: "players.csv"
+    auctions: "auctions.csv"
+
+# ── ETL Pipeline ──────────────────────────────────────────
+etl:
+  batch_size: 1000
+  retry_attempts: 3
+  retry_delay_seconds: 5
+  validate_on_load: true
+  enable_audit_log: true
+  parallelism: 4
+
+  quality_thresholds:
+    max_null_pct: 5.0          # fail if >5% nulls in critical columns
+    max_duplicate_pct: 1.0     # fail if >1% duplicates
+    min_rows: 100              # fail if fewer than 100 rows
+
+# ── Analytics ─────────────────────────────────────────────
+analytics:
+  player_value:
+    batting_weight: 0.45
+    bowling_weight: 0.35
+    fielding_weight: 0.20
+    powerplay_bonus: 1.15
+    death_overs_bonus: 1.20
+    recent_form_window: 5      # last N matches
+
+  auction:
+    budget_reserve_pct: 10.0  # keep 10% in reserve
+    max_single_player_pct: 20.0
+    undervalued_threshold: 0.75  # value score / price ratio
+    overpriced_threshold: 1.30
+
+  franchise:
+    min_squad_size: 18
+    max_squad_size: 25
+    max_overseas_in_xi: 4
+    salary_cap_crore: 100.0
+
+# ── Forecasting ───────────────────────────────────────────
+forecasting:
+  rolling_window: 5
+  trend_window: 10
+  min_matches_for_forecast: 10
+  confidence_interval: 0.95
+
+# ── API ───────────────────────────────────────────────────
+api:
+  title: "IPL Franchise Analytics API"
+  version: "v1"
+  prefix: "/api/v1"
+  docs_url: "/docs"
+  redoc_url: "/redoc"
+  cors_origins:
+    - "http://localhost:8501"
+    - "http://localhost:3000"
+  rate_limit_per_minute: 120
+
+# ── Streamlit ─────────────────────────────────────────────
+streamlit:
+  page_title: "IPL Franchise Analytics"
+  page_icon: "🏏"
+  layout: "wide"
+  initial_sidebar_state: "expanded"
+  theme:
+    primary_color: "#1E3A5F"
+    background_color: "#0F1117"
+    secondary_background_color: "#1A1D2E"
+    text_color: "#FFFFFF"
+
+# ── Monitoring ────────────────────────────────────────────
+monitoring:
+  kpi_refresh_interval_minutes: 30
+  alert_cooldown_minutes: 60
+  enable_email_alerts: true
+
+  thresholds:
+    pipeline_failure_alert: true
+    kpi_deviation_pct: 20.0
+    api_error_rate_pct: 5.0
+    api_latency_ms: 2000
+
+# ── Logging ───────────────────────────────────────────────
+logging:
+  level: "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  dir: "logs"
+  format: "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
+  rotation: "midnight"
+  retention_days: 30
+  handlers:
+    - "console"
+    - "file"
+
+# ── Reporting ─────────────────────────────────────────────
+reporting:
+  output_dir: "reports"
+  franchise_name: "IPL Analytics FC"
+  season: 2024
+  currency: "INR (Crore)"
+  auto_generate:
+    weekly: true
+    monthly: true
+    executive: true
